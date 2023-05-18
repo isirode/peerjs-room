@@ -49,3 +49,11 @@ export function getApplicationMessage(from: User, payload: AnyMessage): Message 
     payload: payload,
   };
 }
+
+// Info : this is a message type that you can use per app
+// It is useful to support multiple app / message provided by different libraries without colliding with each other
+// I do not explicitly use it here, so that you implement the app layer as you want, but it is an useful feature
+export interface AppMessage {
+  app: string;// Identifier for your app / plugin
+  payload: AnyMessage;
+}

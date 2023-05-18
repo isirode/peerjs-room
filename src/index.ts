@@ -12,7 +12,7 @@ export type { User } from './domains/room/models/User';
 export type { LocalUser } from './domains/room/models/User';
 
 export { MessageType, RoomMessageType } from "./domains/room/models/Message";
-export type { TextMessage, Message, RenameUserMessage, AnyMessage, RoomMessage } from "./domains/room/models/Message";
+export type { TextMessage, Message, RenameUserMessage, AnyMessage, RoomMessage, AppMessage } from "./domains/room/models/Message";
 
 export type { Events } from './domains/room/P2PRoom';
 export { sanitizeUser, P2PRoom } from './domains/room/P2PRoom';
