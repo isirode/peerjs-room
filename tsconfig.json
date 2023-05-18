@@ -1,0 +1,10 @@
+{
+  "include": ["src/**/*"],
+  "compilerOptions": {
+    "target": "es2018",
+    "lib": ["ES2018", "DOM"],
+    "moduleResolution": "node",
+    "experimentalDecorators": true,
+    /*"strict": true */
+  }
+}
