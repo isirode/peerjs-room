@@ -14,6 +14,9 @@ export enum MessageType {
 export interface Message {
   type: MessageType;
   from: User;
+  // FIXME : I am not sure whether or not we should indicate it
+  // And if it should be there
+  isWhisper?: boolean;
   payload: AnyMessage;
 }
 

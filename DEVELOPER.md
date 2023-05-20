@@ -30,6 +30,14 @@ Or
     - [x] Text message
     - [x] Rename message
     - [x] Applicative message
+  - [x] Send a message to specific user
+
+- [x] Channel
+  - [ ] Basic system for a channel system
+
+- [ ] Room adminship
+  - [ ] Free room
+  - [ ] Administrated room
 
 ## TODO
 

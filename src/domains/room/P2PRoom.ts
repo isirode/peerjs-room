@@ -1,12 +1,15 @@
 import prand from "pure-rand";// TODO : checkout other random libraries
 import { Connection } from "./models/Connection";
 import { IPeer, Peer } from "./models/Peer";
-import * as PeerJS from 'peerjs';
+import { DataConnection } from 'peerjs';
 import { IClient, IRoom } from "./models/Room";
 import Emittery from "emittery";
 import { list } from 'iterative';
 import { LocalUser, User } from "./models/User";
-import { TextMessage, Message, RenameUserMessage, AnyMessage, MessageType, RoomMessage, RoomMessageType } from "./models/Message";
+import { TextMessage, Message, RenameUserMessage, AnyMessage, MessageType, RoomMessage, RoomMessageType, AppMessage } from "./models/Message";
+import { IChannel } from "../channel/IChannel";
+import { Channel } from "../channel/Channel";
+import { error } from "console";
 
 // Info : we add a circular reference issue
 // For now, we are doing this
@@ -23,14 +26,14 @@ export function sanitizeUser(user: User) {
 
 export interface Events {
   // technical
-  connectionEstablished: {connection: PeerJS.DataConnection, user: User};
-  connectionClosed: {connection: PeerJS.DataConnection, user: User | undefined};
-  connectionError: {connection: PeerJS.DataConnection, user: User, error: Error};
+  connectionEstablished: {connection: DataConnection, user: User};
+  connectionClosed: {connection: DataConnection, user: User | undefined};
+  connectionError: {connection: DataConnection, user: User, error: Error};
   missingConnections: {missingConnections: IClient[]};
   allConnected: {clients: IClient[]};
   // messaging
-  textMessage: {connection: PeerJS.DataConnection | undefined, user: User | undefined, text: string, textMessage: TextMessage, root: Message};
-  renameUserMessage: {connection: PeerJS.DataConnection, user: User | undefined, newName: string, formerName: string, renameUserMessage: RenameUserMessage, root: Message};
+  textMessage: {connection: DataConnection | undefined, user: User | undefined, text: string, textMessage: TextMessage, root: Message};
+  renameUserMessage: {connection: DataConnection, user: User | undefined, newName: string, formerName: string, renameUserMessage: RenameUserMessage, root: Message};
   // app
   appMessage: {user: User | undefined, appMessage: AnyMessage, root: Message};
 }
@@ -55,6 +58,8 @@ export class P2PRoom {
   // PeerJS connections are not typed
   connections: Map<string, Connection> = new Map();
 
+  channels: Map<string, IChannel<unknown>> = new Map();
+
   events: Emittery<Events> = new Emittery();
 
   get admin(): User | undefined {
@@ -78,12 +83,9 @@ export class P2PRoom {
     }, 10 * 1000);// TODO : make it configurable
   }
 
-  public broadcast (message: Message) {
+  public broadcast(message: Message) {
     console.log('connections : ' + this.connections.size);
-    this.connections.forEach(connection => {
-      console.log(`Sending message to ${connection.peer}`);
-      connection.send(JSON.stringify(message));
-    });
+    this.broadcastToConnections(list(this.connections.values()), message);
   }
 
   public broadcastApplicationMessage(message: AnyMessage) {
@@ -95,12 +97,56 @@ export class P2PRoom {
     this.broadcast(rootMessage);
   }
 
+  protected broadcastToConnections(connections: Connection[], message: Message) {
+    connections.forEach(connection => {
+      console.log(`Sending message to ${connection.peer}`);
+      // FIXME : I am not sure I need to stringify the object actually
+      connection.send(message);
+    });
+  }
+
+  public send(user: User, message: Message) {
+    const connection = this.getConnection(user);
+    if (connection === undefined) {
+      throw new Error(`attempting to send a message to a user not present: '${user.name}:${user.peer.id}'`);
+    }
+    message.isWhisper = true;
+    connection.send(message);
+  }
+
+  public sendToUsers(users: User[], message: Message) {
+    // FIXME : should it be considered to be a whisper
+    message.isWhisper = true;
+    const connections = this.getConnections(users);
+    this.broadcastToConnections(connections, message);
+  }
+
+  public sendApplicationMessage(user: User, message: AnyMessage) {
+    const rootMessage = {
+      type: MessageType.App,
+      from: this.getUserPayload(this.localUser),
+      payload: message,
+      isWhisper: true
+    } as Message;
+    this.send(user, rootMessage);
+  }
+
+  public sendApplicationMessageToUsers(users: User[], message: AnyMessage) {
+    const rootMessage = {
+      type: MessageType.App,
+      from: this.getUserPayload(this.localUser),
+      payload: message,
+      isWhisper: true
+    } as Message;
+    this.sendToUsers(users, rootMessage);
+  }
+
   public bindPeer() {
     const self = this;
 
     // TODO : use a common method for both sides of connections
     // This is not called when we are the ones opening the connection
-    this.localUser.peer.base.on('connection', (connection: PeerJS.DataConnection) => {
+    this.localUser.peer.base.on('connection', (connection: DataConnection) => {
       console.log('connection');
       console.log(connection);
       this.bindConnection(connection, true);
@@ -109,31 +155,37 @@ export class P2PRoom {
     });
   }
 
-  public bindConnection (connection: PeerJS.DataConnection, isEstablished: boolean) {
+  public bindConnection (dataConnection: DataConnection, isEstablished: boolean) {
     // Info : this method is called when we are attempting to bind an user
     // And when we have received a connection
 
     // TODO : compare the room clients and the connections here
 
     console.log("connection state");
-    console.log(connection.peerConnection.connectionState);
-    console.log("connection reliable: " + connection.reliable);
+    console.log(dataConnection.peerConnection.connectionState);
+    console.log("connection reliable: " + dataConnection.reliable);
     console.log("established: " + isEstablished);
     
     // FIXME ; remove it or set it back if necessary
     const self = this;
     console.log('attempt to bind connection');
-    console.log('peer ' + connection.peer);
+    console.log('peer ' + dataConnection.peer);
+
+    const connection = new Connection(dataConnection);
+
+    for (let channel of this.channels.values()) {
+      this.bindConnectionToChannel(connection, channel);
+    }
 
     // TODO : replace strings events by an enum
-    connection.on('open', () => {
-      console.log('connection opened to ' + connection.peer);
+    dataConnection.on('open', () => {
+      console.log('connection opened to ' + dataConnection.peer);
 
-      this.connections.set(connection.peer, new Connection(connection));
+      this.connections.set(dataConnection.peer, connection);
 
       // Init a user
       const peer = {
-        id: connection.peer
+        id: dataConnection.peer
       } as IPeer;
 
       const user = {
@@ -143,45 +195,46 @@ export class P2PRoom {
 
       this.users.set(peer.id, user);
 
-      this.events.emit('connectionEstablished', {connection, user});
+      this.events.emit('connectionEstablished', {connection: dataConnection, user});
 
       // Info : to synchronize the names
-      this.sendRenameMessage(this.localUser.name, '');
+      this.broadcastRenameMessage(this.localUser.name, '');
     });
-    connection.on('data', (data) => {
+    dataConnection.on('data', (data) => {
       console.log("Data received");
       console.log(data);
-      this.handleMessage(connection, data);
+      this.handleMessage(dataConnection, data);
     });
     // TODO : (duplicate function) move this into a method with all the bindings
-    connection.on('close', () => {
+    dataConnection.on('close', () => {
       console.log('connection closed');
 
       // FIXME : remove the user from the room server side too ?
 
       // TODO : rename peer of connection in either a Peer or peerId
 
-      let user = this.users.get(connection.peer);
+      let user = this.users.get(dataConnection.peer);
 
-      this.users.delete(connection.peer);
+      this.users.delete(dataConnection.peer);
 
-      this.connections.delete(connection.peer);
+      this.connections.delete(dataConnection.peer);
 
-      this.events.emit('connectionClosed', {connection, user});
+      this.events.emit('connectionClosed', {connection: dataConnection, user});
 
       // TODO : unit test that we never call this.api.leaveRoom ?
       // this.api.leaveRoom(this.room.roomId, this.peer.id)
       // this.pushMessage(new Message('(info)', this.localeMessaging.formatPeerHasDisconnected(connection.peer), ''))
     });
     // Seems to be never called
-    connection.on('error', function (error) {
+    dataConnection.on('error', function (error) {
       console.log('connection : error received');
       console.log(error);
 
-      let user = this.users.get(connection.peer);
+      let user = this.users.get(dataConnection.peer);
       
-      this.roomMessageHandler.onConnectionError(connection, error);
+      this.roomMessageHandler.onConnectionError(dataConnection, error);
     });
+
   }
 
   public connectToClients() {
@@ -200,11 +253,11 @@ export class P2PRoom {
     });
   }
 
-  public handleMessage (connection: PeerJS.DataConnection, data: any) {
+  public handleMessage (connection: DataConnection, data: any) {
     console.log('handleMessage');
     console.log(data);
 
-    const message: Message = JSON.parse(data) as Message;
+    const message: Message = data as Message;
 
     let user: User | undefined = this.getUserByPeerId(message.from.peer.id);
     if (user === undefined) {
@@ -227,7 +280,7 @@ export class P2PRoom {
     }
   }
 
-  protected handleRoomMessage(connection: PeerJS.DataConnection, user: User | undefined, message: RoomMessage, root: Message) {
+  protected handleRoomMessage(connection: DataConnection, user: User | undefined, message: RoomMessage, root: Message) {
     switch (message.type) {
       case RoomMessageType.Text:
         const textMessage = message.payload as TextMessage;
@@ -245,21 +298,12 @@ export class P2PRoom {
     }
   }
 
-  public sendMessage (text: string) {
+  broadcastTextMessage (text: string) {
 
     const textMessage: TextMessage = {
       text: text,
     };
-    const roomMessage: RoomMessage = {
-      type: RoomMessageType.Text,
-      payload: textMessage,
-    }
-    // TODO : provide helpers for this
-    const message: Message = {
-      type: MessageType.Room,
-      from: this.getUserPayload(this.localUser),
-      payload: roomMessage,
-    };
+    const message = this.getTextMessageAsMessage(text);
 
     // Info : we display the message
     this.events.emit('textMessage', {
@@ -273,7 +317,7 @@ export class P2PRoom {
     this.broadcast(message);
   }
 
-  public sendRenameMessage(newName: string, formerName: string) {
+  public broadcastRenameMessage(newName: string, formerName: string) {
     const renameMessage: RenameUserMessage = {
       newName: newName,
       formerName: formerName,
@@ -291,16 +335,99 @@ export class P2PRoom {
     this.broadcast(message);
   }
 
+  sendTextMessage(user: User, text: string) {
+
+    const textMessage: TextMessage = {
+      text: text,
+    };
+    const message = this.getTextMessageAsMessage(text);
+
+    // Info : we display the message
+    this.events.emit('textMessage', {
+      connection: undefined,
+      user: this.localUser,
+      text,
+      textMessage,
+      root: message
+    });
+
+    this.send(user, message);
+  }
+
+  // TODO : something for channels accross multiples rooms ?
+  getChannel<T>(channelName: string): IChannel<T> {
+    let channel = this.channels.get(channelName) as IChannel<T>;
+    if (channel === undefined) {
+      let _broadcast = (data: T) => {
+        const message = this.getChannelMessage(data, channelName);
+        this.broadcast(message);
+      }
+      let _broadcastToUsers = (data: T, users: User[]) => {
+        const message = this.getChannelMessage(data, channelName);
+        this.sendToUsers(users, message);
+      }
+      let _broadcastToConnections = (data: T, connections: DataConnection[]) => {
+        // TODO : a boolean to indicate wether or not send to connections not in the room ?
+        const message = this.getChannelMessage(data, channelName);
+        for (let co of connections) {
+          co.send(message);
+        }
+      }
+      let _send = (data: T, user: User) => {
+        const message = this.getChannelMessage(data, channelName);
+        this.send(user, message);
+      }
+      channel = new Channel<T>(
+        channelName,
+        _broadcast,
+        _broadcastToUsers,
+        _broadcastToConnections,
+        _send
+      );
+      this.channels.set(channelName, channel);
+      for (let connection of this.connections.values()) {
+        // FIXME : replace _connection by connection ?
+        this.bindConnectionToChannel(connection, channel);
+      }
+    }
+
+    return channel;
+  }
+
+  protected bindConnectionToChannel(connection: Connection, channel: IChannel<unknown>) {
+    connection._connection.on('open', () => {
+      channel.events.emit('open', { user: this.getUserByPeerId(connection.peer), connection: connection._connection });
+    });
+    connection._connection.on('data', (data) => {
+      // TODO : verify data
+      channel.events.emit('data', {data: data, user: this.getUserByPeerId(connection.peer), connection: connection._connection});
+    });
+    connection._connection.on('error', (error) => {
+      channel.events.emit('error', {error, user: this.getUserByPeerId(connection.peer), connection: connection._connection});
+    });
+    connection._connection.on('close', () => {
+      channel.events.emit('close', { user: this.getUserByPeerId(connection.peer), connection: connection._connection });
+    });
+  }
+
+  closeChannel(channelName: string) {
+    // TODO : could have a settings to throw or throw
+    // Want to use the logger system here as well
+    const channel = this.channels.get(channelName);
+    if (channel === undefined) {
+      console.warn(`channel '${channelName}' was not present in the room`);
+      return;
+    }
+    this.channels.delete(channelName);
+    channel.events.emit('closeChannel');
+  }
+
   public disconnect() {
     this.connections.forEach(connection => {
       console.log('closing connection ' + connection.peer);
       connection.close();
     });
     this.connections.clear();
-  }
-
-  public getUser(peerId: string): User | undefined {
-    return this.users.get(peerId);
   }
 
   // Info : necessary to avoid a circular dependency issue with the JSON serialization
@@ -354,6 +481,37 @@ export class P2PRoom {
     }
   }
 
+  protected getTextMessageAsMessage(text: string): Message {
+    const textMessage: TextMessage = {
+      text: text,
+    };
+    const roomMessage: RoomMessage = {
+      type: RoomMessageType.Text,
+      payload: textMessage,
+    }
+    // TODO : provide helpers for this
+    const message: Message = {
+      type: MessageType.Room,
+      from: this.getUserPayload(this.localUser),
+      payload: roomMessage,
+    };
+    return message;
+  }
+
+  protected getChannelMessage(data: unknown, channelName: string, isWhisper?: boolean): Message {
+    const appMessage: AppMessage = {
+      app: channelName,
+      payload: data
+    }
+    const message: Message = {
+      type: MessageType.Room,
+      from: this.getUserPayload(this.localUser),
+      payload: appMessage,
+      isWhisper: isWhisper
+    };
+    return message;
+  }
+
   // TODO : maybe use a class for this
   getRandomUninitializedName() {
     const seed = Date.now() ^ (Math.random() * 0x100000000);
@@ -367,7 +525,38 @@ export class P2PRoom {
     return this.names[Math.floor(Math.random() * this.names.length)];
   }
 
+  getUser(peerId: string): User | undefined {
+    return this.getUserByPeerId(peerId);
+  }
+
   getUserByPeerId(peerId: string): User | undefined {
     return this.users.get(peerId);
   }
+
+  getUserByName(name: string): User | undefined {
+    // FIXME : should we check if the name is present multiple times ?
+    // Since we are not ensuring that the name is unique
+    for (const user of this.users.values()) {
+      if (user.name === name) {
+        return user;
+      }
+    }
+    return undefined;
+  }
+
+  getConnection(user: User): Connection | undefined {
+    return this.connections.get(user.peer.id);
+  }
+
+  getConnections(users: User[]): Connection[] {
+    const result: Connection[] = [];
+    for (let user of users) {
+      const connection = this.getConnection(user);
+      if (connection !== undefined) {
+        result.push(connection);
+      }
+    }
+    return result;
+  }
+
 }

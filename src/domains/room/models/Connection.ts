@@ -1,5 +1,5 @@
 // import Peer from 'peerjs'
-import * as PeerJS from 'peerjs'
+import { DataConnection } from 'peerjs'
 
 export interface IConnection {
   peer: string;
@@ -9,21 +9,21 @@ export interface IConnection {
 export class Connection implements IConnection {// We need this to avoid circular references
 
   // FIXME : expore this more properly ?
-  public _connection: PeerJS.DataConnection;
+  public _connection: DataConnection;
 
-  constructor (connection: PeerJS.DataConnection) {
+  constructor(connection: DataConnection) {
     this._connection = connection;
   }
 
-  public get peer (): string {
+  public get peer(): string {
     return this._connection.peer;
   }
 
-  public send (data: string) {
+  public send(data: any) {
     this._connection.send(data);
   }
 
-  public close () {
+  public close() {
     this._connection.close();
   }
 }
