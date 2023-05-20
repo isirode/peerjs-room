@@ -19,3 +19,6 @@ export { sanitizeUser, P2PRoom } from './domains/room/P2PRoom';
 
 export { PeerJSServerClient } from './domains/peerjs/client/PeerJSServerClient';
 export { RoomService } from './domains/peerjs/client/RoomService';
+
+export type { IChannel} from './domains/channel/IChannel';
+export { Channel} from './domains/channel/Channel';

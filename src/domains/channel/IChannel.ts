@@ -7,6 +7,7 @@ export interface Events<T> {
   data: { data: T, user: User | undefined, connection: DataConnection};
   close: { user: User | undefined, connection: DataConnection};
   error: { error: Error, user: User | undefined, connection: DataConnection};
+  closeChannel: undefined;
 }
 
 export interface IChannel<T> {
