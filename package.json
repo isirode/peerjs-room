@@ -10,7 +10,8 @@
     "start": "parcel --no-cache",
     "prebuild": "rimraf dist",
     "build": "parcel build --no-cache",
-    "local": "npm run build && npm link"
+    "local": "npm run build && npm link",
+    "postinstall": "npm run build"
   },
   "author": "Isirode",
   "license": "SEE LICENSE IN COPYING",
