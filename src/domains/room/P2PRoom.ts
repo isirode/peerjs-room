@@ -9,7 +9,10 @@ import { LocalUser, User } from "./models/User";
 import { TextMessage, Message, RenameUserMessage, AnyMessage, MessageType, RoomMessage, RoomMessageType, AppMessage } from "./models/Message";
 import { IChannel } from "../channel/IChannel";
 import { Channel } from "../channel/Channel";
-import { error } from "console";
+import { IChannelFetchOptions } from "../channel/IChannelFetchOptions";
+import { v4 as uuidv4 } from 'uuid';
+import { Request, Response, Client, IClientMapper, IServerMapper, Server } from 'peerjs-request-response';
+import { P2PRoomOptions } from "./P2PRoomOptions";
 
 // Info : we add a circular reference issue
 // For now, we are doing this
@@ -36,6 +39,8 @@ export interface Events {
   renameUserMessage: {connection: DataConnection, user: User | undefined, newName: string, formerName: string, renameUserMessage: RenameUserMessage, root: Message};
   // app
   appMessage: {user: User | undefined, appMessage: AnyMessage, root: Message};
+  // TODO : channel message ?
+  // It would be a duplicate
 }
 
 // TODO : ensure unique name setting
@@ -44,7 +49,7 @@ export interface Events {
 
 // TODO : implement ownership ?
 
-// should be able to handle chatting and switching to a game or a specialized room
+// TODO : implement pre-made channels
 export class P2PRoom {
 
   localUser: LocalUser;
@@ -58,18 +63,24 @@ export class P2PRoom {
   // PeerJS connections are not typed
   connections: Map<string, Connection> = new Map();
 
-  channels: Map<string, IChannel<unknown>> = new Map();
+  channels: Map<string, IChannel<unknown, unknown, unknown>> = new Map();
 
   events: Emittery<Events> = new Emittery();
+
+  options?: P2PRoomOptions;
+
+  static defaultRequesTimeout: number = 5000;
 
   get admin(): User | undefined {
     return this.getUserByPeerId(this.room.roomOwner.id);
   }
 
-  constructor(localUser: LocalUser, room: IRoom, names: string[] = []) {
+  constructor(localUser: LocalUser, room: IRoom, names: string[] = [], options?: P2PRoomOptions) {
     this.localUser = localUser;
     this.room = room;
     this.names = names;
+    // TODO : implement a default ?
+    this.options = options;
 
     this.users.set(localUser.peer.id, localUser);
 
@@ -257,6 +268,9 @@ export class P2PRoom {
     console.log('handleMessage');
     console.log(data);
 
+    // TODO : it is not guaranteed that data is a P2PRoom Message
+    // It is up to the user to ensure that
+
     const message: Message = data as Message;
 
     let user: User | undefined = this.getUserByPeerId(message.from.peer.id);
@@ -273,6 +287,14 @@ export class P2PRoom {
         break;
       case MessageType.App:
         const appMessage = message.payload;
+        if (this.options?.channelOptions?.excludeChannelMessagesFromDataNotifications) {
+          const appMessageAsAppMessage = appMessage as AppMessage;
+          const excludeData = this.channels.has(appMessageAsAppMessage.app);
+          if (excludeData) {
+            console.warn('excluding data because it belong to a channel', data, appMessage);
+            return;
+          }
+        }
         this.events.emit('appMessage', {user, appMessage, root: message});
         break;
       default:
@@ -355,36 +377,146 @@ export class P2PRoom {
   }
 
   // TODO : something for channels accross multiples rooms ?
-  getChannel<T>(channelName: string): IChannel<T> {
-    let channel = this.channels.get(channelName) as IChannel<T>;
+  // FIXME : pass an option parameter instead of a single parameter
+  getChannel<ChannelMessageType, FetchRequestBodyType = unknown, FetchResponseBodyType = unknown>(channelName: string, channelFetchOptions?: IChannelFetchOptions<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType>): IChannel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType> {
+    const self = this;
+    let channel = this.channels.get(channelName) as IChannel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType>;
     if (channel === undefined) {
-      let _broadcast = (data: T) => {
+      let _broadcast = (data: ChannelMessageType) => {
         const message = this.getChannelMessage(data, channelName);
         this.broadcast(message);
       }
-      let _broadcastToUsers = (data: T, users: User[]) => {
+      let _broadcastToUsers = (data: ChannelMessageType, users: User[]) => {
         const message = this.getChannelMessage(data, channelName);
         this.sendToUsers(users, message);
       }
-      let _broadcastToConnections = (data: T, connections: DataConnection[]) => {
+      let _broadcastToConnections = (data: ChannelMessageType, connections: DataConnection[]) => {
         // TODO : a boolean to indicate wether or not send to connections not in the room ?
         const message = this.getChannelMessage(data, channelName);
         for (let co of connections) {
           co.send(message);
         }
       }
-      let _send = (data: T, user: User) => {
+      let _send = (data: ChannelMessageType, user: User) => {
         const message = this.getChannelMessage(data, channelName);
         this.send(user, message);
       }
-      channel = new Channel<T>(
+
+      // TODO : could make a method for this
+      // server part
+      const serverMapper: IServerMapper<Message, FetchRequestBodyType, FetchResponseBodyType> = {
+        unwrap: function (data: unknown): Request<FetchRequestBodyType> {
+          const message: Message = data as Message;
+
+          let user: User | undefined = this.getUserByPeerId(message.from.peer.id);
+          if (user === undefined) {
+            console.warn("user is undefined");
+          }
+
+          switch (message.type) {
+            case MessageType.App:
+              const appMessage = message.payload as AppMessage;
+              if (appMessage.app === channel.name) {
+                const channelMessage = appMessage.payload as ChannelMessageType;
+                const request = channelFetchOptions.serverMapper.unwrap(channelMessage);
+                return request;
+              }
+              break;
+            default:
+              throw new Error('unknown peer message type')
+          }
+
+          return undefined;
+
+        },
+        wrap: function (response: Response<FetchResponseBodyType>) {
+          const responseMessage = channelFetchOptions.serverMapper.wrap(response); 
+          const channelMessage = self.getChannelMessage(responseMessage, channel + "-response");
+          return channelMessage;
+        }
+      }
+
+      const channelServer = new Server(serverMapper, channelFetchOptions.serverHandler);
+
+      // FIXME : should we instantiate another channel for the responses
+      // Or specialize the fetch Channels ?
+      // Warn : we cannot export it in a class as it is
+      const clientMapper: IClientMapper<FetchRequestBodyType, FetchResponseBodyType> = {
+        wrap(request: Request<FetchRequestBodyType>): any {
+          const requestMessage = channelFetchOptions.clientMapper.wrap(request); 
+          const channelMessage = self.getChannelMessage(requestMessage, channelName);
+          return channelMessage;
+        },
+        unwrap(data: any): Response<FetchResponseBodyType> | undefined {
+          const message: Message = data as Message;
+
+          let user: User | undefined = self.getUserByPeerId(message.from.peer.id);
+          if (user === undefined) {
+            console.warn("user is undefined");
+          }
+
+          switch (message.type) {
+            case MessageType.App:
+              const appMessage = message.payload as AppMessage;
+              if (appMessage.app === channel.channelResponseName) {
+                const response = channelFetchOptions.clientMapper.unwrap(appMessage.payload);
+                return response;
+              }
+              break;
+            default:
+              throw new Error('unknown peer message type')
+          }
+          return undefined;
+        }
+      }
+
+      let _fetch = async (data: FetchRequestBodyType, user: User): Promise<Response<FetchResponseBodyType>> => {
+        // TODO : make the throw an option
+        // We could send the data into the channel as well
+        if (channelFetchOptions === undefined) {
+          throw new Error(`channelFetchOptions is mandatory when using the fetch APIs`)
+        }
+        const request: Request<FetchRequestBodyType> = {
+          // TODO : allow to provide an id provider
+          id: uuidv4(),
+          timeout: channelFetchOptions.fetchTimeout ?? P2PRoom.defaultRequesTimeout,
+          content: data
+        };
+
+        const connection = this.getConnection(user);
+        if (connection === undefined) {
+          throw new Error(`did not find a connection belonging to the user '${user.name}:${user.peer.id}'`);
+        }
+
+        const client = new Client(connection._connection, clientMapper);
+
+        return client.fetch(request);
+      }
+      let _fetchFromUsers = (data: FetchRequestBodyType, users: User[]): Promise<Response<FetchResponseBodyType>[]> => {
+        if (channelFetchOptions === undefined) {
+          throw new Error(`channelFetchOptions is mandatory when using the fetch APIs`)
+        }
+        const request: Request = {
+          // TODO : allow to provide an id provider
+          id: uuidv4(),
+          timeout: channelFetchOptions.fetchTimeout ?? P2PRoom.defaultRequesTimeout,
+          content: data
+        };
+        
+        // We will need to use await Promise.all(
+        throw new Error(`not implemented`);
+      }
+      channel = new Channel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType>(
         channelName,
         _broadcast,
         _broadcastToUsers,
         _broadcastToConnections,
-        _send
+        _send,
+        _fetch,
+        _fetchFromUsers,
+        channelServer
       );
-      this.channels.set(channelName, channel);
+      this.channels.set(channelName, channel as IChannel<unknown, unknown, unknown>);
       for (let connection of this.connections.values()) {
         // FIXME : replace _connection by connection ?
         this.bindConnectionToChannel(connection, channel);
@@ -394,13 +526,30 @@ export class P2PRoom {
     return channel;
   }
 
-  protected bindConnectionToChannel(connection: Connection, channel: IChannel<unknown>) {
+  protected bindConnectionToChannel<ChannelMessageType = unknown, FetchRequestBodyType = unknown, FetchResponseBodyType = unknown>(connection: Connection, channel: IChannel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType>) {
     connection._connection.on('open', () => {
       channel.events.emit('open', { user: this.getUserByPeerId(connection.peer), connection: connection._connection });
     });
     connection._connection.on('data', (data) => {
-      // TODO : verify data
-      channel.events.emit('data', {data: data, user: this.getUserByPeerId(connection.peer), connection: connection._connection});
+      // TODO : this is a duplicate
+      // But IDK how to mutualize it
+      const message: Message = data as Message;
+
+      let user: User | undefined = this.getUserByPeerId(message.from.peer.id);
+      if (user === undefined) {
+        console.warn("user is undefined");
+      }
+
+      switch (message.type) {
+        case MessageType.App:
+          const appMessage = message.payload as AppMessage;
+          if (appMessage.app === channel.name) {
+            channel.events.emit('data', {data: appMessage.payload as ChannelMessageType, user: this.getUserByPeerId(connection.peer), connection: connection._connection});
+          }
+          break;
+        default:
+          throw new Error('unknown peer message type')
+      }
     });
     connection._connection.on('error', (error) => {
       channel.events.emit('error', {error, user: this.getUserByPeerId(connection.peer), connection: connection._connection});

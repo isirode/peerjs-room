@@ -1,47 +1,68 @@
-import Emittery, { OmnipresentEventData, DatalessEventNames } from "emittery";
+import Emittery from "emittery";
 import { Events, IChannel } from "./IChannel";
 import { DataConnection } from "peerjs";
 import { User } from "../room/models/User";
+import { IServer, Response } from "peerjs-request-response";
 
-export class Channel<T> implements IChannel<T> {
+export class Channel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType> implements IChannel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType> {
 
-  events: Emittery<Events<T>> = new Emittery();
+  events: Emittery<Events<ChannelMessageType>> = new Emittery();
 
   name: string;
+  channelResponseName: string;
 
-  protected _broadcast: (data: T) => void;
-  protected _broadcastToUsers: (data: T, users: User[]) => void;
-  protected _broadcastToConnections: (data: T, connections: DataConnection[]) => void;
-  protected _send: (data: T, user: User) => void;
+  protected _broadcast: (data: ChannelMessageType) => void;
+  protected _broadcastToUsers: (data: ChannelMessageType, users: User[]) => void;
+  protected _broadcastToConnections: (data: ChannelMessageType, connections: DataConnection[]) => void;
+  protected _send: (data: ChannelMessageType, user: User) => void;
+  protected _fetch: (data: FetchRequestBodyType, user: User) => Promise<Response<FetchResponseBodyType>>;
+  protected _fetchFromUsers: (data: FetchRequestBodyType, users: User[]) => Promise<Response<FetchResponseBodyType>[]>;
+
+  server: IServer;
 
   constructor(
     name: string,
-    _broadcast: (data: T) => void,
-    _broadcastToUsers: (data: T, users: User[]) => void,
-    _broadcastToConnections: (data: T, connections: DataConnection[]) => void,
-    _send: (data: T, user: User) => void
+    _broadcast: (data: ChannelMessageType) => void,
+    _broadcastToUsers: (data: ChannelMessageType, users: User[]) => void,
+    _broadcastToConnections: (data: ChannelMessageType, connections: DataConnection[]) => void,
+    _send: (data: ChannelMessageType, user: User) => void,
+    _fetch: (data: FetchRequestBodyType, user: User) => Promise<Response<FetchResponseBodyType>>,
+    _fetchFromUsers: (data: FetchRequestBodyType, users: User[]) => Promise<Response<FetchResponseBodyType>[]>,
+    server: IServer
   ) {
     this.name = name;
+    this.channelResponseName = name + '-response';
     this._broadcast = _broadcast;
     this._broadcastToUsers = _broadcastToUsers;
     this._broadcastToConnections = _broadcastToConnections;
     this._send = _send;
+    this._fetch = _fetch;
+    this._fetchFromUsers = _fetchFromUsers;
+    this.server = server;
   }
 
-  broadcast(data: T) {
+  broadcast(data: ChannelMessageType) {
     this._broadcast(data);
   }
 
-  broadcastToUsers(data: T, users: User[]) {
+  broadcastToUsers(data: ChannelMessageType, users: User[]) {
     this._broadcastToUsers(data, users);
   }
 
-  broadcastToConnections(data: T, connections: DataConnection[]) {
+  broadcastToConnections(data: ChannelMessageType, connections: DataConnection[]) {
     this._broadcastToConnections(data, connections);
   }
 
-  send(data: T, user: User) {
+  send(data: ChannelMessageType, user: User) {
     this._send(data, user);
+  }
+
+  fetch(data: FetchRequestBodyType, user: User): Promise<Response<FetchResponseBodyType>> {
+    return this._fetch(data, user);
+  }
+
+  fetchFromUsers(data: FetchRequestBodyType, users: User[]): Promise<Response<FetchResponseBodyType>[]> {
+    return this._fetchFromUsers(data, users);
   }
 
 }

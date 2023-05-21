@@ -11,6 +11,7 @@ export enum MessageType {
   App = 'App'
 }
 
+// TODO : make a generic to have type verification
 export interface Message {
   type: MessageType;
   from: User;
