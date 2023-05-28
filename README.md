@@ -1,6 +1,6 @@
 # peerjs-room
 
-Disclaimer: Not affiliated with the original peerjs providerS.
+Disclaimer: Not affiliated with the original peerjs providers.
 
 This is a library based on PeerJS that allow to connect to a peerjs-server-room setup and to broadcast message to a room.
 

@@ -17,6 +17,7 @@ export class Channel<ChannelMessageType, FetchRequestBodyType, FetchResponseBody
   protected _send: (data: ChannelMessageType, user: User) => void;
   protected _fetch: (data: FetchRequestBodyType, user: User) => Promise<Response<FetchResponseBodyType>>;
   protected _fetchFromUsers: (data: FetchRequestBodyType, users: User[]) => Promise<Response<FetchResponseBodyType>[]>;
+  protected _fetchFromAllUsers: (data: FetchRequestBodyType) => Promise<Response<FetchResponseBodyType>[]>;
 
   server: IServer;
 
@@ -28,6 +29,7 @@ export class Channel<ChannelMessageType, FetchRequestBodyType, FetchResponseBody
     _send: (data: ChannelMessageType, user: User) => void,
     _fetch: (data: FetchRequestBodyType, user: User) => Promise<Response<FetchResponseBodyType>>,
     _fetchFromUsers: (data: FetchRequestBodyType, users: User[]) => Promise<Response<FetchResponseBodyType>[]>,
+    _fetchFromAllUsers: (data: FetchRequestBodyType) => Promise<Response<FetchResponseBodyType>[]>,
     server: IServer
   ) {
     this.name = name;
@@ -38,6 +40,7 @@ export class Channel<ChannelMessageType, FetchRequestBodyType, FetchResponseBody
     this._send = _send;
     this._fetch = _fetch;
     this._fetchFromUsers = _fetchFromUsers;
+    this._fetchFromAllUsers = _fetchFromAllUsers;
     this.server = server;
   }
 
@@ -65,4 +68,7 @@ export class Channel<ChannelMessageType, FetchRequestBodyType, FetchResponseBody
     return this._fetchFromUsers(data, users);
   }
 
+  fetchFromAllUsers(data: FetchRequestBodyType): Promise<Response<FetchResponseBodyType>[]> {
+    return this._fetchFromAllUsers(data);
+  }
 }

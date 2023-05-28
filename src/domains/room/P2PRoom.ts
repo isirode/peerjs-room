@@ -492,19 +492,70 @@ export class P2PRoom {
 
         return client.fetch(request);
       }
-      let _fetchFromUsers = (data: FetchRequestBodyType, users: User[]): Promise<Response<FetchResponseBodyType>[]> => {
+      let _fetchFromUsers = async (data: FetchRequestBodyType, users: User[]): Promise<Response<FetchResponseBodyType>[]> => {
         if (channelFetchOptions === undefined) {
           throw new Error(`channelFetchOptions is mandatory when using the fetch APIs`)
         }
-        const request: Request = {
+        // FIXME : a lot of duplicated code here
+        const request: Request<FetchRequestBodyType> = {
           // TODO : allow to provide an id provider
           id: uuidv4(),
           timeout: channelFetchOptions.fetchTimeout ?? P2PRoom.defaultRequesTimeout,
           content: data
         };
         
-        // We will need to use await Promise.all(
-        throw new Error(`not implemented`);
+        let promises: Promise<Response<FetchResponseBodyType>>[] = [];
+        for (let user of users) {
+          const connection = this.getConnection(user);
+          if (connection === undefined) {
+            // TODO : option to log a warn instead
+            // or return an empty response
+            throw new Error(`did not find a connection belonging to the user '${user.name}:${user.peer.id}'`);
+          }
+          const client = new Client(connection._connection, clientMapper);
+
+          const promise = client.fetch(request);
+
+          promises.push(promise);
+        }
+
+        const responses = await Promise.all(promises);
+
+        return responses;
+      }
+      // FIXME : duplicated code
+      // When mutualizing, we need to be careful about not capturing the users at the time of the invocation
+      // If it works this way
+      let _fetchFromAllUsers = async (data: FetchRequestBodyType): Promise<Response<FetchResponseBodyType>[]> => {
+        if (channelFetchOptions === undefined) {
+          throw new Error(`channelFetchOptions is mandatory when using the fetch APIs`)
+        }
+        // FIXME : a lot of duplicated code here
+        const request: Request<FetchRequestBodyType> = {
+          // TODO : allow to provide an id provider
+          id: uuidv4(),
+          timeout: channelFetchOptions.fetchTimeout ?? P2PRoom.defaultRequesTimeout,
+          content: data
+        };
+        
+        let promises: Promise<Response<FetchResponseBodyType>>[] = [];
+        for (let user of self.users.values()) {
+          const connection = this.getConnection(user);
+          if (connection === undefined) {
+            // TODO : option to log a warn instead
+            // or return an empty response
+            throw new Error(`did not find a connection belonging to the user '${user.name}:${user.peer.id}'`);
+          }
+          const client = new Client(connection._connection, clientMapper);
+
+          const promise = client.fetch(request);
+
+          promises.push(promise);
+        }
+
+        const responses = await Promise.all(promises);
+
+        return responses;
       }
       channel = new Channel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType>(
         channelName,
@@ -514,6 +565,7 @@ export class P2PRoom {
         _send,
         _fetch,
         _fetchFromUsers,
+        _fetchFromAllUsers,
         channelServer
       );
       this.channels.set(channelName, channel as IChannel<unknown, unknown, unknown>);
