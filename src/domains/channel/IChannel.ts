@@ -24,8 +24,10 @@ export interface IChannel<ChannelMessageType, FetchRequestBodyType, FetchRespons
   // Is this necessary ?
   fetch(data: FetchRequestBodyType, user: User): Promise<Response<FetchResponseBodyType>>;
   fetchFromUsers(data: FetchRequestBodyType, users: User[]): Promise<Response<FetchResponseBodyType>[]>;
+  fetchFromAllUsers(data: FetchRequestBodyType): Promise<Response<FetchResponseBodyType>[]>;
   // TODO : implement a respond system
-  //respond(data: U, user: User);
+  // respond(data: U, user: User);
+
   // TODO : support other types of fetch
   // Like, emitting an event when a data is received
   // One that returns an array of Promises
