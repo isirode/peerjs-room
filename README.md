@@ -68,7 +68,9 @@ const localUser = {
   name: 'an username',
 };
 
-p2pRoom = new P2PRoom(localUser, room, animalNames);
+const names = ['Bob', 'Francis', 'Jessica', 'Lucie'];
+
+p2pRoom = new P2PRoom(localUser, room, names);
 
 // Info : only the last 3 events are of importance (message, rename, applicative message)
 // The rest can be used to debug or inform the user (errors, connection established, connection closed)
