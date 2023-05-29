@@ -316,7 +316,7 @@ export class P2PRoom {
         this.events.emit('renameUserMessage', {connection, user, newName: renameUserMessage.newName, formerName: renameUserMessage.formerName, renameUserMessage, root})
         break;
       default:
-        throw new Error("unknown room message type");
+        throw new Error(`unknown room message type ${message.type}`);
     }
   }
 
@@ -465,7 +465,7 @@ export class P2PRoom {
               }
               break;
             default:
-              throw new Error('unknown peer message type')
+              throw new Error(`unknown peer message type ${message.type}`)
           }
           return undefined;
         }
@@ -600,8 +600,11 @@ export class P2PRoom {
             channel.events.emit('data', {data: appMessage.payload as ChannelMessageType, user: this.getUserByPeerId(connection.peer), connection: connection._connection});
           }
           break;
+        case MessageType.Room:
+          // do nothing
+          break;
         default:
-          throw new Error('unknown peer message type')
+          throw new Error(`unknown peer message type ${message.type}`)
       }
     });
     connection._connection.on('error', (error) => {
