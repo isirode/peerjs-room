@@ -423,7 +423,8 @@ export class P2PRoom {
               }
               break;
             default:
-              throw new Error('unknown peer message type')
+              // TODO : log the message as well
+              throw new Error(`unknown peer message type ${message.type}`);
           }
 
           return undefined;
