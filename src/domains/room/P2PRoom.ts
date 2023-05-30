@@ -291,7 +291,7 @@ export class P2PRoom {
           const appMessageAsAppMessage = appMessage as AppMessage;
           const excludeData = this.channels.has(appMessageAsAppMessage.app);
           if (excludeData) {
-            console.warn('excluding data because it belong to a channel', data, appMessage);
+            console.warn('excluding data because it belong to a channel', data, appMessage, this.channels.size);
             return;
           }
         }
@@ -590,10 +590,16 @@ export class P2PRoom {
   }
 
   protected bindConnectionToChannel<ChannelMessageType = unknown, FetchRequestBodyType = unknown, FetchResponseBodyType = unknown>(connection: Connection, channel: IChannel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType>) {
+    
+    console.log(`bindConnectionToChannel ${channel.name}`);
+
     connection._connection.on('open', () => {
       channel.events.emit('open', { user: this.getUserByPeerId(connection.peer), connection: connection._connection });
     });
     connection._connection.on('data', (data) => {
+
+      console.log('on data channel', data);
+
       // TODO : this is a duplicate
       // But IDK how to mutualize it
       const message: Message = data as Message;
