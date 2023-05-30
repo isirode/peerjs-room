@@ -381,6 +381,9 @@ export class P2PRoom {
   // TODO : something for channels accross multiples rooms ?
   // FIXME : pass an option parameter instead of a single parameter
   getChannel<ChannelMessageType, FetchRequestBodyType = unknown, FetchResponseBodyType = unknown>(channelName: string, channelFetchOptions?: IChannelFetchOptions<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType>): IChannel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType> {
+    
+    console.log(`instantiating channel ${channelName}`);
+
     const self = this;
     let channel = this.channels.get(channelName) as IChannel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType>;
     if (channel === undefined) {
@@ -582,6 +585,9 @@ export class P2PRoom {
         channelServer
       );
       this.channels.set(channelName, channel as IChannel<unknown, unknown, unknown>);
+
+      console.log(`binding channel ${channelName} to connections (size: ${this.connections.size})`);
+
       for (let connection of this.connections.values()) {
         // FIXME : replace _connection by connection ?
         this.bindConnectionToChannel(connection, channel);
@@ -618,7 +624,7 @@ export class P2PRoom {
         case MessageType.App:
           const appMessage = message.payload as AppMessage;
           if (appMessage.app === channel.name) {
-            console.log('emitting channel data events', appMessage.payload);
+            console.log('emitting channel data events', appMessage.payload, channel);
             channel.events.emit('data', {data: appMessage.payload as ChannelMessageType, user: this.getUserByPeerId(connection.peer), connection: connection._connection});
           }
           break;

@@ -1,6 +1,6 @@
 {
   "name": "peerjs-room",
-  "version": "1.3.6",
+  "version": "1.3.7",
   "description": "This is WebRTC room system based on PeerJS.",
   "main": "dist/main.js",
   "source": "src/index.ts",
