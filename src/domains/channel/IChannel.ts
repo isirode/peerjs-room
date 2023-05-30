@@ -1,7 +1,7 @@
 import Emittery from "emittery";
 import { DataConnection } from "peerjs";
 import { User } from "../room/models/User";
-import { Response } from 'peerjs-request-response';
+import { IServer, Response } from 'peerjs-request-response';
 
 // FIXME : we should use <T, U>
 export interface Events<T> {
@@ -15,6 +15,7 @@ export interface Events<T> {
 export interface IChannel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType> {
   name: string;
   channelResponseName;
+  server: IServer;
   events: Emittery<Events<ChannelMessageType>>;
   broadcast(data: ChannelMessageType);
   broadcastToUsers(data: ChannelMessageType, users: User[]);

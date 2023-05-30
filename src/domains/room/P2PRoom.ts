@@ -184,6 +184,10 @@ export class P2PRoom {
 
     const connection = new Connection(dataConnection);
 
+    // FIXME : make sure that adding the connection while not open does not creates bug
+    // If not put there : not possible to bind the channels to the connection
+    this.connections.set(dataConnection.peer, connection);
+
     console.log(`channel size : ${this.channels.size}`);
 
     for (let channel of this.channels.values()) {
@@ -193,8 +197,6 @@ export class P2PRoom {
     // TODO : replace strings events by an enum
     dataConnection.on('open', () => {
       console.log('connection opened to ' + dataConnection.peer);
-
-      this.connections.set(dataConnection.peer, connection);
 
       // Init a user
       const peer = {
@@ -592,9 +594,6 @@ export class P2PRoom {
         // FIXME : replace _connection by connection ?
         this.bindConnectionToChannel(connection, channel);
       }
-      if (this.options.channelOptions.autoListen) {
-        channelServer.listen();
-      }
     }
 
     return channel;
@@ -626,6 +625,7 @@ export class P2PRoom {
           if (appMessage.app === channel.name) {
             console.log('emitting channel data events', appMessage.payload, channel);
             channel.events.emit('data', {data: appMessage.payload as ChannelMessageType, user: this.getUserByPeerId(connection.peer), connection: connection._connection});
+            channel.server.handle(appMessage.payload, connection._connection);
           }
           break;
         case MessageType.Room:
