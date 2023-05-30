@@ -415,10 +415,10 @@ export class P2PRoom {
         unwrap: function (data: unknown): Request<FetchRequestBodyType> {
           const message: Message = data as Message;
 
-          let user: User | undefined = this.getUserByPeerId(message.from.peer.id);
-          if (user === undefined) {
-            console.warn("user is undefined");
-          }
+          // let user: User | undefined = this.getUserByPeerId(message.from.peer.id);
+          // if (user === undefined) {
+          //   console.warn("user is undefined");
+          // }
 
           switch (message.type) {
             case MessageType.App:
@@ -458,10 +458,10 @@ export class P2PRoom {
         unwrap(data: any): Response<FetchResponseBodyType> | undefined {
           const message: Message = data as Message;
 
-          let user: User | undefined = self.getUserByPeerId(message.from.peer.id);
-          if (user === undefined) {
-            console.warn("user is undefined");
-          }
+          // let user: User | undefined = self.getUserByPeerId(message.from.peer.id);
+          // if (user === undefined) {
+          //   console.warn("user is undefined");
+          // }
 
           switch (message.type) {
             case MessageType.App:
@@ -625,7 +625,10 @@ export class P2PRoom {
           if (appMessage.app === channel.name) {
             console.log('emitting channel data events', appMessage.payload, channel);
             channel.events.emit('data', {data: appMessage.payload as ChannelMessageType, user: this.getUserByPeerId(connection.peer), connection: connection._connection});
-            channel.server.handle(appMessage.payload, connection._connection);
+            // FIXME : fix the handling of the messages
+            // we are redoing this steps on the server in the other method
+            // Make sure to handle MessageType.Room
+            channel.server.handle(message, connection._connection);
           }
           break;
         case MessageType.Room:

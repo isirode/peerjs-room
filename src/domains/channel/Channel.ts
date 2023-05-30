@@ -3,6 +3,7 @@ import { Events, IChannel } from "./IChannel";
 import { DataConnection } from "peerjs";
 import { User } from "../room/models/User";
 import { IServer, Response } from "peerjs-request-response";
+import { Message } from "../room/models/Message";
 
 export class Channel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType> implements IChannel<ChannelMessageType, FetchRequestBodyType, FetchResponseBodyType> {
 
@@ -19,7 +20,7 @@ export class Channel<ChannelMessageType, FetchRequestBodyType, FetchResponseBody
   protected _fetchFromUsers: (data: FetchRequestBodyType, users: User[]) => Promise<Response<FetchResponseBodyType>[]>;
   protected _fetchFromAllUsers: (data: FetchRequestBodyType) => Promise<Response<FetchResponseBodyType>[]>;
 
-  server: IServer;
+  server: IServer<Message, FetchRequestBodyType, FetchResponseBodyType>;
 
   constructor(
     name: string,
@@ -30,7 +31,7 @@ export class Channel<ChannelMessageType, FetchRequestBodyType, FetchResponseBody
     _fetch: (data: FetchRequestBodyType, user: User) => Promise<Response<FetchResponseBodyType>>,
     _fetchFromUsers: (data: FetchRequestBodyType, users: User[]) => Promise<Response<FetchResponseBodyType>[]>,
     _fetchFromAllUsers: (data: FetchRequestBodyType) => Promise<Response<FetchResponseBodyType>[]>,
-    server: IServer
+    server: IServer<Message, FetchRequestBodyType, FetchResponseBodyType>
   ) {
     this.name = name;
     this.channelResponseName = name + '-response';
