@@ -714,12 +714,13 @@ export class P2PRoom {
   }
 
   protected getChannelMessage(data: unknown, channelName: string, isWhisper?: boolean): Message {
+    // TODO : test this
     const appMessage: AppMessage = {
       app: channelName,
       payload: data
     }
     const message: Message = {
-      type: MessageType.Room,
+      type: MessageType.App,
       from: this.getUserPayload(this.localUser),
       payload: appMessage,
       isWhisper: isWhisper
