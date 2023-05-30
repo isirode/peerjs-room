@@ -184,6 +184,8 @@ export class P2PRoom {
 
     const connection = new Connection(dataConnection);
 
+    console.log(`channel size : ${this.channels.size}`);
+
     for (let channel of this.channels.values()) {
       this.bindConnectionToChannel(connection, channel);
     }
@@ -584,6 +586,9 @@ export class P2PRoom {
         // FIXME : replace _connection by connection ?
         this.bindConnectionToChannel(connection, channel);
       }
+      if (this.options.channelOptions.autoListen) {
+        channelServer.listen();
+      }
     }
 
     return channel;
@@ -613,6 +618,7 @@ export class P2PRoom {
         case MessageType.App:
           const appMessage = message.payload as AppMessage;
           if (appMessage.app === channel.name) {
+            console.log('emitting channel data events', appMessage.payload);
             channel.events.emit('data', {data: appMessage.payload as ChannelMessageType, user: this.getUserByPeerId(connection.peer), connection: connection._connection});
           }
           break;
