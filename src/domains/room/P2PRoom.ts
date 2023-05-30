@@ -475,7 +475,10 @@ export class P2PRoom {
         // TODO : make the throw an option
         // We could send the data into the channel as well
         if (channelFetchOptions === undefined) {
-          throw new Error(`channelFetchOptions is mandatory when using the fetch APIs`)
+          throw new Error(`channelFetchOptions is mandatory when using the fetch APIs`);
+        }
+        if (this.isLocalUser(user)) {
+          throw new Error(`the user passed in parameter is the local user`);
         }
         const request: Request<FetchRequestBodyType> = {
           // TODO : allow to provide an id provider
@@ -507,6 +510,9 @@ export class P2PRoom {
         
         let promises: Promise<Response<FetchResponseBodyType>>[] = [];
         for (let user of users) {
+          if (this.isLocalUser(user)) {
+            continue;
+          }
           const connection = this.getConnection(user);
           if (connection === undefined) {
             // TODO : option to log a warn instead
@@ -541,6 +547,10 @@ export class P2PRoom {
         
         let promises: Promise<Response<FetchResponseBodyType>>[] = [];
         for (let user of self.users.values()) {
+          // TODO : test this
+          if (this.isLocalUser(user)) {
+            continue;
+          }
           const connection = this.getConnection(user);
           if (connection === undefined) {
             // TODO : option to log a warn instead
@@ -762,6 +772,10 @@ export class P2PRoom {
       }
     }
     return result;
+  }
+
+  isLocalUser(user: User) {
+    return user.peer.id === this.localUser.peer.id;
   }
 
 }
