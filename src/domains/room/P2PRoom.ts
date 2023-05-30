@@ -439,7 +439,7 @@ export class P2PRoom {
         },
         wrap: function (response: Response<FetchResponseBodyType>) {
           const responseMessage = channelFetchOptions.serverMapper.wrap(response); 
-          const channelMessage = self.getChannelMessage(responseMessage, channel + "-response");
+          const channelMessage = self.getChannelMessage(responseMessage, channelName + "-response");
           return channelMessage;
         }
       }
