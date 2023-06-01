@@ -64,6 +64,7 @@ export class P2PRoom {
   connections: Map<string, Connection> = new Map();
 
   channels: Map<string, IChannel<unknown, unknown, unknown>> = new Map();
+  channelsResponses: Set<string> = new Set();
 
   events: Emittery<Events> = new Emittery();
 
@@ -293,7 +294,8 @@ export class P2PRoom {
         const appMessage = message.payload;
         if (this.options?.channelOptions?.excludeChannelMessagesFromDataNotifications) {
           const appMessageAsAppMessage = appMessage as AppMessage;
-          const excludeData = this.channels.has(appMessageAsAppMessage.app);
+          // TODO : test this
+          const excludeData = this.channels.has(appMessageAsAppMessage.app) || this.channelsResponses.has(appMessageAsAppMessage.app);
           if (excludeData) {
             console.warn('excluding data because it belong to a channel', data, appMessage, this.channels.size);
             return;
@@ -587,6 +589,7 @@ export class P2PRoom {
         channelServer
       );
       this.channels.set(channelName, channel as IChannel<unknown, unknown, unknown>);
+      this.channelsResponses.add(channel.channelResponseName);
 
       console.log(`binding channel ${channelName} to connections (size: ${this.connections.size})`);
 
@@ -655,6 +658,8 @@ export class P2PRoom {
       return;
     }
     this.channels.delete(channelName);
+    // TODO : mutualize every channelName + -response occurrences
+    this.channelsResponses.delete(channelName + '-response');
     channel.events.emit('closeChannel');
   }
 
