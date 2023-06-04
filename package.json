@@ -1,6 +1,6 @@
 {
   "name": "peerjs-room",
-  "version": "1.3.13",
+  "version": "1.3.14",
   "description": "This is WebRTC room system based on PeerJS.",
   "main": "dist/main.js",
   "source": "src/index.ts",
@@ -21,7 +21,7 @@
     "emittery": "1.0.1",
     "iterative": "1.9.2",
     "peerjs": "1.3.2",
-    "peerjs-request-response": "https://github.com/isirode/peerjs-request-response/releases/download/1.5.5/peerjs-request-response-1.5.5.tgz",
+    "peerjs-request-response": "https://github.com/isirode/peerjs-request-response/releases/download/1.5.6/peerjs-request-response-1.5.6.tgz",
     "pure-rand": "6.0.2",
     "uuid": "9.0.0"
   },
